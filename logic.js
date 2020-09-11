@@ -3,14 +3,7 @@
 function buildUrl(){
     const
         domain = "earthquake.usgs.gov",
-        endpoint = "/earthquakes/feed/v1.0/summary/all_week.geojson",
-        format = "geojson",
-        starttime = "2014-01-01",
-        endtime = "2014-01-02",
-        maxLon = -69.52148437,
-        minLon = -123.83789062,
-        maxLat = 48.74894534,
-        minLat = 25.16517337;
+        endpoint = "/earthquakes/feed/v1.0/summary/all_week.geojson"
 
     return `https://${domain}${endpoint}`;
 }
@@ -24,13 +17,59 @@ function createFeatures(earthquakeData) {
         "</h3><hr><p>" + new Date(feature.properties.time) + "</p>");
     }
 
-    // Create a GeoJSON layer containing the features array on the earthquakeData object
-    // Run the onEachFeature function once for each piece of data in the array
-    const earthquakes = L.geoJSON(earthquakeData, {
-        onEachFeature: onEachFeature
-    });
+    function styling(feature) {
+        return {
+          opacity: 1,
+          fillOpacity: .7,
+          fillColor: circleColors(feature.properties.mag),
+          color: "#000000",
+          radius: circleRadius(feature.properties.mag),
+          stroke: true,
+          weight: 0.5
+        };
+      }
 
-    // Sending our earthquakes layer to the createMap function
+    function circleColors(magnitude) {
+        if (magnitude > 5) {
+          return "#EA2C2C";
+        }
+        if (magnitude > 4) {
+          return "#EA822C";
+        }
+        if (magnitude > 3) {
+          return "#EE9C00";
+        }
+        if (magnitude > 2) {
+          return "#EECC00";
+        }
+        if (magnitude > 1) {
+          return "#D4EE00";
+        }
+        return "#98EE00";
+      };
+
+    // Set magnitude-radius of the earthquake
+    function circleRadius(magnitude) {
+        if (magnitude === 0) {
+        return 1;
+        }
+        return magnitude * 5;
+    };
+
+    // Create a GeoJSON layer containing the features array on the earthquakeData object
+        // Run the onEachFeature function once for each piece of data in the array
+    const earthquakes = L.geoJson(earthquakeData, {
+        // We turn each feature into a circleMarker on the map.
+        pointToLayer: function(feature, latlng) {
+            console.log(earthquakeData);
+            return L.circleMarker(latlng);
+          },
+        // We set the style for each circleMarker using our styling function.
+        style: styling,
+        onEachFeature: onEachFeature
+      })
+    
+    // Sending earthquakes layer to createMap function
     createMap(earthquakes);
 }
 
@@ -51,18 +90,18 @@ function createMap(earthquakes) {
             accessToken: API_KEY
     });
 
-    // Define a baseMaps object to hold our base layers
+    // Define a baseMaps object to hold base layers
     const baseMaps = {
             "Street Map": streetmap,
             "Dark Map": darkmap
     };
 
-    // Create overlay object to hold our overlay layer
+    // Create overlay object to hold overlay layer
     const overlayMaps = {
             Earthquakes: earthquakes
     };
 
-    // Create our map, giving it the streetmap and earthquakes layers to display on load
+    // Create the map with streetmap and earthquakes layers to display on load
     const myMap = L.map("map", {
             center: [37.09, -95.71],
             zoom: 5,
@@ -75,11 +114,41 @@ function createMap(earthquakes) {
     L.control.layers(baseMaps, overlayMaps, {
             collapsed: false
     }).addTo(myMap);
-}
+
+    // Set magnitudes and colors. Note: colors have been translated
+    // in a Hex color generator from the ones set above to match 0.7 transparency
+    const magnitudes = [0, 1, 2, 3, 4, 5];
+    const colors = [
+    "#98f000",
+    "#d4f000",
+    "#f0cc00",
+    "#f09c00",
+    "#ea832e",
+    "#ea2e2e"
+    ];
+
+    var legend = L.control({ position: "bottomright" });
+    legend.onAdd = function() {
+            var div = L.DomUtil.create("div", "info legend");
+            var labels = [];
+        var legendInfo = "<h1>Magnitude</h1>" +
+                "<div class=\"labels\">" +
+                "</div>";
+        div.innerHTML = legendInfo;
+        magnitudes.forEach(function(limit, index) {
+            labels.push('<li style="background-color: ' + colors[index] +'AB">' + magnitudes[index] + '</li>');
+        });
+        div.innerHTML += "<ul>" + labels.join("") + "</ul>";
+        return div;
+        }
+    legend.addTo(myMap);
+
+    }
+
 
 (async function(){
     const queryUrl = buildUrl();
     const data = await d3.json(queryUrl);
-    // Once we get a response, send the data.features object to the createFeatures function
+    // Send the response data.features object to the createFeatures function
     createFeatures(data.features);
 })()
